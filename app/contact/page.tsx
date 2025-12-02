@@ -7,7 +7,6 @@ export default function ContactPage() {
     name: "",
     phone: "",
     email: "",
-    service: "",
     message: ""
   });
   
@@ -48,7 +47,6 @@ export default function ContactPage() {
           name: "",
           phone: "",
           email: "",
-          service: "",
           message: ""
         });
       } else {
@@ -223,25 +221,6 @@ export default function ContactPage() {
                       className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
                       placeholder="john@example.com"
                     />
-                  </div>
-
-                  <div className="mb-4 md:mb-6">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Service Interested In
-                    </label>
-                    <select
-                      name="service"
-                      required
-                      value={formData.service}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select a service</option>
-                      <option value="Software Development">Software Development</option>
-                      <option value="Web Development">App Development</option>
-                      <option value="Web Development">Web Development</option>
-                      <option value="Other">Other</option>
-                    </select>
                   </div>
 
                   <div className="mb-4 md:mb-6">
