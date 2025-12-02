@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   rewrites: async () => [
     {
       source: '/api/contact',
-      destination: 'http://hrms.globaltechsoftwaresolutions.cloud/api/accounts/contact/',
+      destination: `${process.env.NEXT_PUBLIC_API_URL}contact/`,
     },
   ],
 };

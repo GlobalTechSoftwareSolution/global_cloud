@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   
   try {
-    const response = await fetch('http://hrms.globaltechsoftwaresolutions.cloud/api/accounts/contact/', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}contact/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
