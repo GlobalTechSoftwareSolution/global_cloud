@@ -3,6 +3,7 @@
 import HeroSection from "../components/HeroSection";
 import Buttons from "../components/Buttons";
 import Contact from '@/app/contact/page'
+import Bot from '@/app/bot/page'
 
 export default function Home() {
   const navigateTo = (url: string) => {
@@ -14,17 +15,15 @@ export default function Home() {
     window.open("https://wa.me/918495862494", "_blank");
   };
 
-  const handleChatBotClick = () => {
-    // Replace with your actual chatbot link
-    window.open("https://your-chatbot-link.com", "_blank");
-  };
+
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       
       <HeroSection onNavigate={navigateTo} />
       <Contact />
-      <Buttons onWhatsAppClick={handleWhatsAppClick} onChatBotClick={handleChatBotClick} />
+      <Bot />
+      <Buttons onWhatsAppClick={handleWhatsAppClick} />
     </div>
   );
 }

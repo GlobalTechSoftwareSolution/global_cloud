@@ -1,260 +1,334 @@
 "use client";
-
-import { useState } from "react";
+import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
+interface FormData {
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+}
 
 export default function ContactPage() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
-    phone: "",
     email: "",
-    message: ""
+    phone: "",
+    message: "",
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<{type: string, message: string} | null>(null);
+  const [popupMessage, setPopupMessage] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  // Auto-fill form from query parameters on client side
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+
+    const handleSearchParams = async () => {
+      try {
+        // Dynamically import the hook to avoid SSR issues
+        // const { useSearchParams } = await import('next/navigation'); // Not used in this component
+        
+        // Since we can't use the hook directly in this async context,
+        // we'll access the URL directly through window.location
+        if (typeof window !== 'undefined' && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const name = urlParams.get('name') || "";
+          const email = urlParams.get('email') || "";
+          const phone = urlParams.get('phone') || "";
+          const message = urlParams.get('message') || "";
+          
+          console.log("Auto-filling form with query params:", { name, email, phone, message });
+          
+          if (name || email || phone || message) {
+            setFormData({
+              name,
+              email,
+              phone,
+              message
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Could not initialize search params:', error);
+      }
+    };
+
+    handleSearchParams();
+  }, []);
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    console.log(`Field ${name} changed to:`, value);
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setSubmitStatus(null);
+    setPopupMessage(null); // Clear any previous messages
     
     try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
+      // Send data directly to the backend API
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://hrms.globaltechsoftwaresolutions.cloud";
+      
+      console.log("API Base URL:", apiBase);
+      
+      if (!apiBase || apiBase === "undefined") {
+        throw new Error("API configuration error. Please contact support.");
+      }
+      
+      // Log form data before validation
+      console.log("Form data being submitted:", formData);
+      
+      // Validate form data
+      if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.message.trim()) {
+        throw new Error("All fields are required. Please fill in all fields.");
+      }
+      
+      // Simple email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error("Please enter a valid email address.");
+      }
+      
+      // Simple phone validation (at least 10 digits)
+      const phoneRegex = /^\+?[0-9\s\-()]{10,}$/;
+      if (!phoneRegex.test(formData.phone)) {
+        throw new Error("Please enter a valid phone number.");
+      }
+      
+      console.log("Form data passed validation, preparing to send request");
+      
+      // Remove the problematic ngrok header that causes CORS issues
+      const response = await fetch(`${apiBase}/api/accounts/contact/`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          // Removed "ngrok-skip-browser-warning" header which was causing CORS issues
         },
         body: JSON.stringify(formData),
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setSubmitStatus({
-          type: "success",
-          message: "Thank you for your message! We'll contact you soon."
-        });
+      
+      console.log("Response received:", response);
+      console.log("Response status:", response.status);
+      console.log("Response OK?:", response.ok);
+      
+      // Check if the response is ok
+      if (!response.ok) {
+        let errorMessage = "Failed to send message. ";
         
-        setFormData({
-          name: "",
-          phone: "",
-          email: "",
-          message: ""
-        });
-      } else {
-        throw new Error(result.error || 'Failed to send message');
+        try {
+          const errorData = await response.json();
+          console.log("Error data from server:", errorData);
+          errorMessage += errorData.error || `Server responded with status ${response.status}`;
+        } catch (parseError) {
+          console.log("Error parsing error response:", parseError);
+          errorMessage += `Server responded with status ${response.status}`;
+        }
+        
+        throw new Error(errorMessage);
       }
+      
+      // Success
+      console.log("Message sent successfully!");
+      setPopupMessage("Thank you for your message! We'll get back to you soon.");
+      setFormData({ name: "", email: "", phone: "", message: "" });
     } catch (error) {
-      setSubmitStatus({
-        type: "error",
-        message: error instanceof Error ? error.message : "Oops! Something went wrong. Please try again."
-      });
+      console.error("Contact form error:", error);
+      
+      // Handle different types of errors
+      let errorMessage = "There was an error sending your message. Please try again.";
+      
+      if (error instanceof TypeError) {
+        // Network error (e.g., CORS, offline)
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      setPopupMessage(errorMessage);
     } finally {
+      console.log("Submission process completed");
       setIsSubmitting(false);
     }
   };
 
+  const closePopup = () => {
+    console.log("Closing popup");
+    setPopupMessage(null);
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-gray-900">
-      
-      <div className="flex-grow py-8 md:py-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center mb-10 md:mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Contact Us</h1>
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Have questions or want to learn more about our services? Get in touch with us!
+    <>
+      <main className="min-h-screen bg-gray-50 text-black flex flex-col items-center px-4 py-16">
+        {/* Header Section */}
+        <section className="text-center mb-12 max-w-3xl">
+          <h1 className="text-5xl font-bold text-gray-800 mb-4">
+            Get in <span className="text-blue-600">Touch</span>
+          </h1>
+          <p className="text-gray-600 text-lg">
+            Have questions or want to discuss a project? We&apos;re here to help and answer any questions you might have.
+          </p>
+        </section>
+
+        {/* Main Content */}
+        <div className="flex flex-col lg:flex-row gap-10 w-full max-w-6xl">
+          {/* Contact Info Card */}
+          <section className="bg-white shadow-lg rounded-2xl p-8 lg:w-2/5">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Contact Information</h2>
+            <p className="text-gray-600 mb-6">
+              Fill out the form or contact us through alternative methods listed below
             </p>
-          </div>
 
-          <div className="bg-[#0D1117] dark:bg-[#0D1117] rounded-xl shadow-xl border border-gray-800 overflow-hidden">
-            <div className="md:flex">
-
-              {/* LEFT PANEL */}
-              <div className="md:w-2/5 bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-white p-6 md:p-8 border-r border-gray-800">
-                <h2 className="text-2xl font-bold mb-6">Get in Touch</h2>
-                
-                <div className="space-y-6">
-                  
-                  {/* PHONE */}
-                  <div className="flex items-start">
-                    <button
-                      onClick={() => window.location.href = "tel:+918495862494"}
-                      className="flex-shrink-0 bg-blue-600 p-3 rounded-full"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </button>
-
-                    <div className="ml-4">
-                      <h3 className="text-lg font-semibold">Phone</h3>
-                      <a 
-                        href="tel:+918495862494"
-                        className="mt-1 text-sm md:text-base underline text-blue-300 hover:text-blue-200"
-                      >
-                        +91 8495862494
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* EMAIL */}
-                  <div className="flex items-start">
-                    <button
-                      onClick={() => window.location.href = "mailto:tech@globaltechsoftwaresolutions.com"}
-                      className="flex-shrink-0 bg-blue-600 p-3 rounded-full"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-
-                    <div className="ml-4 break-words max-w-[250px]">
-                      <h3 className="text-lg font-semibold">Email</h3>
-                      
-                      <a
-                        href="mailto:tech@globaltechsoftwaresolutions.com"
-                        className="mt-1 text-sm md:text-base break-all underline text-blue-300 hover:text-blue-200"
-                      >
-                        tech@globaltechsoftwaresolutions.com
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* ADDRESS */}
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 bg-blue-600 p-3 rounded-full">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-
-                    <div className="ml-4">
-                      <h3 className="text-lg font-semibold">Office</h3>
-                      <p className="mt-1 text-sm md:text-base">
-                        No 10, 4th Floor, Gaduniya Complex, Ramaiah Layout, Vidyaranyapura, Bangalore - 560097
-                      </p>
-                    </div>
-                  </div>
-
+            <div className="space-y-6">
+              {/* Email */}
+              <div className="flex items-start space-x-4">
+                <div className="bg-blue-100 p-3 rounded-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                  </svg>
                 </div>
-
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-4">Business Hours</h3>
-                  <ul className="space-y-2">
-                    <li className="flex justify-between text-sm md:text-base">
-                      <span>Monday-Saturday</span>
-                      <span>10:00 AM - 6:00 PM</span>
-                    </li>
-                  </ul>
+                <div>
+                  <h3 className="text-gray-700 font-semibold">Email</h3>
+                  <a href="mailto:hrglobaltechsoftwaresolutions@gmail.com" className="text-blue-600 hover:underline">
+                    hrglobaltechsoftwaresolutions@gmail.com
+                  </a>
                 </div>
               </div>
 
-              {/* RIGHT FORM PANEL */}
-              <div className="md:w-3/5 p-6 md:p-8">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Send us a message</h2>
+              {/* Phone */}
+              <div className="flex items-start space-x-4">
+                <div className="bg-green-100 p-3 rounded-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-gray-700 font-semibold">Phone</h3>
+                  <a href="tel:+918495862494" className="text-green-600 hover:underline">
+                    +91 8495862494
+                  </a>
+                </div>
+              </div>
 
-                {submitStatus && (
-                  <div className={`mb-6 p-4 rounded-lg ${
-                    submitStatus.type === 'success'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    {submitStatus.message}
-                  </div>
-                )}
-
-                {/* FORM */}
-                <form onSubmit={handleSubmit}>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        required
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="John Doe"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        required
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="+1 (123) 456-7890"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4 md:mb-6">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      required
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
-                      placeholder="john@example.com"
-                    />
-                  </div>
-
-                  <div className="mb-4 md:mb-6">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Your Message
-                    </label>
-                    <textarea
-                      name="message"
-                      rows={4}
-                      required
-                      value={formData.message}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-[#111827] dark:text-white focus:ring-2 focus:ring-blue-500"
-                      placeholder="Tell us about your project..."
-                    ></textarea>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2 md:py-3 px-4 rounded-lg transition duration-300 disabled:opacity-70"
-                  >
-                    {isSubmitting ? "Sending..." : "Send Message"}
-                  </button>
-
-                </form>
-
+              {/* Address */}
+              <div className="flex items-start space-x-4">
+                <div className="bg-purple-100 p-3 rounded-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-gray-700 font-semibold">Address</h3>
+                  <p className="text-gray-600">
+                    No 10, 4th Floor, Gaduniya Complex, Ramaiah Layout, Vidyaranyapura, Bangalore - 560097
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
+          {/* Contact Form Card */}
+          <section className="bg-white shadow-lg rounded-2xl p-8 lg:w-3/5">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Send us a Message</h2>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="name" className="block text-gray-700 font-medium mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-gray-700 font-medium mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    placeholder="Your email address"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="phone" className="block text-gray-700 font-medium mb-2">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  placeholder="Your phone number"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="message" className="block text-gray-700 font-medium mb-2">
+                  Message *
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  value={formData.message}
+                  onChange={handleChange}
+                  required
+                  rows={5}
+                  className="w-full px-4 py-3 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  placeholder="Your message..."
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-blue-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400"
+              >
+                {isSubmitting ? "Sending..." : "Send Message"}
+              </button>
+            </form>
+          </section>
         </div>
-      </div>
-
-    </div>
+      </main>
+      
+      {/* Popup Modal */}
+      {popupMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+            <p className="text-gray-800 mb-6">{popupMessage}</p>
+            <button
+              onClick={closePopup}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      
+    </>
   );
 }

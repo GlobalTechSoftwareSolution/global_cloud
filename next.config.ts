@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   rewrites: async () => [
     {
       source: '/api/contact',
-      destination: `${process.env.NEXT_PUBLIC_API_URL}contact/`,
+      destination: process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/api/accounts/contact/` : 'http://localhost:3000/api/accounts/contact/',
     },
   ],
 };
